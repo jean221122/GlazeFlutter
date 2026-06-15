@@ -5,11 +5,13 @@ import 'package:flutter_svg/flutter_svg.dart';
 class AppLaunchSplash extends StatefulWidget {
   final bool isReady;
   final Widget child;
+  final String? errorMessage;
 
   const AppLaunchSplash({
     super.key,
     required this.isReady,
     required this.child,
+    this.errorMessage,
   });
 
   @override
@@ -118,24 +120,64 @@ class _AppLaunchSplashState extends State<AppLaunchSplash>
                     child: Opacity(
                       opacity: splashOpacity,
                       child: Center(
-                        child: Transform.scale(
-                          scale: logoScale,
-                          child: FutureBuilder<String>(
-                            future: _svgFuture,
-                            builder: (context, snapshot) {
-                              if (!snapshot.hasData) {
-                                return const SizedBox(
-                                  width: 176,
-                                  height: 176,
-                                );
-                              }
-                              return SvgPicture.string(
-                                snapshot.data!,
-                                width: 176,
-                                height: 176,
-                              );
-                            },
-                          ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Transform.scale(
+                              scale: logoScale,
+                              child: FutureBuilder<String>(
+                                future: _svgFuture,
+                                builder: (context, snapshot) {
+                                  if (!snapshot.hasData) {
+                                    return const SizedBox(
+                                      width: 176,
+                                      height: 176,
+                                    );
+                                  }
+                                  return SvgPicture.string(
+                                    snapshot.data!,
+                                    width: 176,
+                                    height: 176,
+                                  );
+                                },
+                              ),
+                            ),
+                            if (widget.errorMessage != null) ...[
+                              const SizedBox(height: 32),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 32,
+                                ),
+                                child: Text(
+                                  'Startup Failed',
+                                  style: theme.textTheme.headlineSmall
+                                      ?.copyWith(
+                                    color: theme.colorScheme.error,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 48,
+                                ),
+                                child: Text(
+                                  widget.errorMessage!,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              Text(
+                                'Please try restarting the app.',
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                     ),

@@ -45,6 +45,7 @@ class _GlazeAppState extends ConsumerState<GlazeApp>
   StreamSubscription<NotificationNavigationData>? _navSub;
   bool _startupReady = const bool.fromEnvironment('FLUTTER_TEST');
   bool _startupHooksAttached = false;
+  String? _startupError;
 
   @override
   void initState() {
@@ -80,9 +81,15 @@ class _GlazeAppState extends ConsumerState<GlazeApp>
 
   Future<void> _initializeStartup() async {
     try {
+      debugPrint('[startup] starting initialization...');
       await _runStartupStep('dotenv', () => dotenv.load(fileName: '.env'));
       await _runStartupStep('tokenizer', preloadO200kBase);
-      await _runStartupStep('prompt worker', PromptWorker.ensureInitialized);
+      await _runStartupStep('prompt worker', () async {
+        await PromptWorker.ensureInitialized().timeout(
+          const Duration(seconds: 15),
+          onTimeout: () => throw TimeoutException('Isolate spawn timed out'),
+        );
+      });
       await _runStartupStep(
         'chat webview environment',
         initChatWebViewEnvironment,
@@ -92,7 +99,9 @@ class _GlazeAppState extends ConsumerState<GlazeApp>
         GenerationNotificationService.instance.init,
       );
       await _runStartupStep('deep links', DeepLinkService.instance.init);
+      debugPrint('[startup] all steps completed successfully');
     } catch (error, stackTrace) {
+      debugPrint('[startup] initialization failed: $error');
       FlutterError.reportError(
         FlutterErrorDetails(
           exception: error,
@@ -103,20 +112,29 @@ class _GlazeAppState extends ConsumerState<GlazeApp>
       );
     }
     if (!mounted) return;
-    setState(() => _startupReady = true);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _attachStartupHooks();
-    });
+    if (_startupError == null) {
+      setState(() => _startupReady = true);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _attachStartupHooks();
+      });
+    }
   }
 
   Future<void> _runStartupStep(
     String name,
-    Future<void> Function() step,
+    FutureOr<void> Function() step,
   ) async {
+    if (_startupError != null) return;
     try {
+      debugPrint('[startup] step: $name...');
       await step();
+      debugPrint('[startup] step: $name done');
     } catch (error, stackTrace) {
+      debugPrint('[startup] step: $name failed: $error');
+      if (mounted) {
+        setState(() => _startupError = '$name: $error');
+      }
       FlutterError.reportError(
         FlutterErrorDetails(
           exception: error,
@@ -191,7 +209,11 @@ class _GlazeAppState extends ConsumerState<GlazeApp>
                 ),
               )
             : const SizedBox.expand();
-        return AppLaunchSplash(isReady: _startupReady, child: appChild);
+        return AppLaunchSplash(
+          isReady: _startupReady,
+          errorMessage: _startupError,
+          child: appChild,
+        );
       },
     );
   }
